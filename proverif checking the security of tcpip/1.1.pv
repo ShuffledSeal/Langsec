@@ -1,0 +1,116 @@
+free c : channel.
+
+type skey.
+type key.
+
+(* expG(k) models the idea of exponentiating some known 'g', 'g^k' *)
+(* i.e. you can think of 'expG(k) = g ^ k' *)
+fun expG(key): skey.
+
+(* exp(x, k) models the idea of exponentiating a value 'x^k' *)
+(* i.e. you can think of 'exp(x, k) = x ^ k' *)
+fun exp(skey, key) : skey.
+
+(** This equation captures the idea that (g^a)^b = (g^b)^a, assuming that
+* expG(k1) = g^k1, and expG(k2) = g^k2
+*)
+equation forall k1 : key, k2 : key; exp(expG(k1), k2) = exp(expG(k2), k1).
+
+fun senc(bitstring, skey) : bitstring.
+reduc forall m : bitstring, k : skey; sdec(senc(m, k), k) = m.
+
+free secretVal : bitstring [ private ].
+
+let procA =
+  new skA : key;
+  (* A's part in the DH protocol *)
+  out(c,expG(skA));
+  in(c,gB:skey);
+  out(c,senc(secretVal,exp(gB,skA)));   
+  in(c,secretMessage:bitstring).
+
+let procB =
+  new skB : key;
+  (* B's part in the DH protocol *)
+  out(c,expG(skB));
+  in(c,gA:skey);
+  in(c,secretMessage:bitstring);
+  out(c,senc(secretVal,exp(gA,skB))).
+  
+
+
+
+query attacker(exp(expG(new skA), new skB)).
+query attacker(secretVal).
+
+(*
+event expGA(key).
+event expGB(key).
+event acceptsA.
+event acceptsB.
+
+query x1: key, x2: key; event(expGA(x1)) ==> event(expGB(x2)).
+query x1: bitstring, x2: skey; event(sencMessage(x1)) ==> event(sdecMessage(senc(x1, x2))).
+
+
+query x1: key; event(expGA(x1)) ==> event(acceptsA).
+query x1: key; event(expGB(x1)) ==> event(acceptsB).
+
+assumptions :
+The authenticity issue revealed in the trace assumes that the attacker can manipulate the messages in such a way that the shared secret is compromised.
+
+The queries event(expGA(x1)) ==> event(acceptsA) and event(expGB(x1)) ==> event(acceptsB) are both true. These results demonstrate that the participants accept the generated keys.
+
+*)
+
+(*
+ * Task 1: Fill in [procA] and [procB] for the following protocol:
+ *    A -> B : g^a;
+ *    B -> A : g^b
+ *
+ * Use the key g^(a*b) to exchange a secret. Show that the protocol is
+ * insecure.
+ *)
+process
+  (procA | procB)
+ (*
+
+1. The attacker has some term k2.
+attacker(k2).
+
+2. The message expG(skA[]) may be sent to the attacker at output {2}.
+attacker(expG(skA[])).
+
+3. By 2, the attacker may know expG(skA[]).
+By 1, the attacker may know k2.
+Using the function exp the attacker may obtain exp(expG(k2),skA[]).
+attacker(exp(expG(k2),skA[])).
+
+4. By 1, the attacker may know k2.
+Using the function expG the attacker may obtain expG(k2).
+attacker(expG(k2)).
+
+5. The message expG(k2) that the attacker may have by 4 may be received at input {3}.
+So the message senc(secretVal[],exp(expG(k2),skA[])) may be sent to the attacker at output {4}.
+attacker(senc(secretVal[],exp(expG(k2),skA[]))).
+
+6. By 5, the attacker may know senc(secretVal[],exp(expG(k2),skA[])).
+By 3, the attacker may know exp(expG(k2),skA[]).
+Using the function sdec the attacker may obtain secretVal[].
+attacker(secretVal[]).
+
+7. By 6, attacker(secretVal[]).
+The goal is reached, represented in the following fact:
+attacker(secretVal[]).
+
+
+Authenticity is the problem even though this protocol has secrecy since the secret key generated cannot be accessed
+
+
+Query not attacker(exp(expG(skA[]),skB[])) is true.
+
+Query not attacker(secretVal[]) is false.
+
+
+
+*)

@@ -1,0 +1,129 @@
+free c : channel.
+free c2:channel.
+
+type skey.
+type pkey.
+fun pk(skey) : pkey.
+
+fun encode(pkey) : bitstring [data].
+
+fun encrypt(bitstring,pkey): bitstring.
+reduc forall m: bitstring , k: skey; decrypt(encrypt(m,pk(k)) ,k) = m.
+
+fun sharedkey(bitstring,bitstring): pkey [data].
+
+fun pack(bitstring, bitstring) : bitstring [data].
+fun pack3(bitstring, bitstring,bitstring) : bitstring [data].
+reduc forall x : bitstring, y : bitstring; unpack(pack(x,y)) = (x,y).
+
+(* Process identifiers *)
+free Alice : bitstring.
+free Bob : bitstring.
+
+free skA : skey [private].
+free skB : skey [private].
+
+free sharedsecretmessage: bitstring [private].
+
+let procA(pkB : pkey) =
+(* Alice waits for a process to initiate the protocol*)
+  in(c, msgInit : bitstring);
+  let pack(I : bitstring, encode(pkI : pkey)) = msgInit in
+  (* This if statement fakes the assurance that we get through 
+   * digital signatures: if the other party is Bob, then we know which must
+   * be his public key
+   *)
+  if I <> Bob || (I = Bob && pkI = pkB) then
+  new NonceA : bitstring;  
+  out(c,encrypt(pack(NonceA, Alice), pkB));
+  in(c, sendBtoA : bitstring);
+  let pack3(Nonce1,NonceB,Bob) = unpack(decrypt(sendBtoA, skA)) in
+  if Nonce1 = NonceA then 
+  out(c,encrypt(NonceB,pkB)).
+
+
+
+let procB(pkA : pkey) = 
+(* Bob Initiates the protocol by sending to Alice his Host ID & his public
+   * key. In the real Needham-Schroeder protocol, the key would be 
+   * obtained via a TTP 
+   *) 
+  out(c, pack(Bob, encode(pkA))); 
+  
+  new NonceB:bitstring;
+  in(c,sendAtoB:bitstring);
+  let pack(NonceA,Host1) = unpack(decrypt(sendAtoB, skB)) in
+  out(c, encrypt(pack3(NonceA,NonceB,Bob), pkA));
+  out(c,encrypt(sharedsecretmessage,sharedkey(NonceA,NonceB))).
+
+  
+query attacker((new NonceA, new NonceB)).
+
+
+process
+  let pkA = pk(skA) in
+  let pkB = pk(skB) in
+  (* The attacker must know Alice and Bob's keys *)
+  out(c2, pkA); out(c2, pkB);
+  (* The attacker must know Bob's secret key for a man in the middle attack *)
+      out(c2,skB);
+  ( (!procA(pkB)) | (!procB(pkA)) )
+
+
+(*
+not atttacker is true so no attack can happen in the query so no man in the middle
+Process 0 (that is, the initial process):
+{1}let pkA: pkey = pk(skA) in
+{2}let pkB: pkey = pk(skB) in
+{3}out(c2, pkA);
+{4}out(c2, pkB);
+{5}out(c2, skB);
+(
+    {6}!
+    {7}in(c, msgInit: bitstring);
+    {8}let pack(I: bitstring,encode(pkI: pkey)) = msgInit in
+    {9}if ((I ≠ Bob) || ((I = Bob) && (pkI = pkB))) then
+    {10}new NonceA: bitstring;
+    {11}out(c, encrypt(pack(NonceA,Alice),pkB));
+    {12}in(c, sendBtoA: bitstring);
+    {13}let pack3(Nonce1: bitstring,NonceB: bitstring,Bob_1: bitstring) = unpack(decrypt(sendBtoA,skA)) in
+    {14}if (Nonce1 = NonceA) then
+    {15}out(c, encrypt(NonceB,pkB))
+) | (
+    {16}!
+    {17}out(c, pack(Bob,encode(pkA)));
+    {18}new NonceB_1: bitstring;
+    {19}in(c, sendAtoB: bitstring);
+    {20}let pack(NonceA_1: bitstring,Host1: bitstring) = unpack(decrypt(sendAtoB,skB)) in
+    {21}out(c, encrypt(pack3(NonceA_1,NonceB_1,Bob),pkA));
+    {22}out(c, encrypt(sharedsecretmessage,sharedkey(NonceA_1,NonceB_1)))
+)
+
+--  Process 1 (that is, process 0, with let moved downwards):
+{1}let pkA: pkey = pk(skA) in
+{3}out(c2, pkA);
+{2}let pkB: pkey = pk(skB) in
+{4}out(c2, pkB);
+{5}out(c2, skB);
+(
+    {6}!
+    {7}in(c, msgInit: bitstring);
+    {8}let pack(I: bitstring,encode(pkI: pkey)) = msgInit in
+    {9}if ((I ≠ Bob) || ((I = Bob) && (pkI = pkB))) then
+    {10}new NonceA: bitstring;
+    {11}out(c, encrypt(pack(NonceA,Alice),pkB));
+    {12}in(c, sendBtoA: bitstring);
+    {13}let pack3(Nonce1: bitstring,NonceB: bitstring,Bob_1: bitstring) = unpack(decrypt(sendBtoA,skA)) in
+    {14}if (Nonce1 = NonceA) then
+    {15}out(c, encrypt(NonceB,pkB))
+) | (
+    {16}!
+    {17}out(c, pack(Bob,encode(pkA)));
+    {18}new NonceB_1: bitstring;
+    {19}in(c, sendAtoB: bitstring);
+    {20}let pack(NonceA_1: bitstring,Host1: bitstring) = unpack(decrypt(sendAtoB,skB)) in
+    {21}out(c, encrypt(pack3(NonceA_1,NonceB_1,Bob),pkA));
+    {22}out(c, encrypt(sharedsecretmessage,sharedkey(NonceA_1,NonceB_1)))
+)
+
+*)
